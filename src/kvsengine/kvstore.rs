@@ -2,13 +2,16 @@ use crate::errors::*;
 use crate::kvsengine::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::io::BufReader;
 use std::io::SeekFrom;
 use std::path::PathBuf;
 use tracing::{debug, info};
-use tracing_subscriber::EnvFilter;
 #[derive(Deserialize, Serialize)]
 struct KvRecord {
     key: String,
@@ -44,6 +47,37 @@ pub struct KvStore {
     active_file_path: PathBuf,
     index_file_path: PathBuf,
     index_map: BTreeMap<String, KvIndex>,
+    readers: HashMap<u64, BufReader<File>>,
+}
+
+fn search_bdd_files(directory: &PathBuf) -> Result<Vec<u64>> {
+    let bdd_files = fs::read_dir(&directory)?
+        .flat_map(|x| -> Result<_> { Ok(x?.path()) })
+        .filter(|file| file.is_file() && file.extension() == Some("bdd".as_ref()))
+        .flat_map(|file| {
+            file.file_stem()
+                .and_then(OsStr::to_str)
+                .map(|name| name.trim_start_matches("file_")) // Yield an Option(String)
+                .map(str::parse::<u64>) //Yield an Option(Option(u64) )
+        }) //Yield an Option(String) -- One level of Option has been removed by the "flat"
+        .flatten() //Extract the value
+        .collect(); //Consume the iterator
+    return Ok(bdd_files);
+}
+
+fn init_readers(directory: &PathBuf) -> Result<HashMap<u64, BufReader<File>>> {
+    let mut my_readers: HashMap<u64, BufReader<File>> = HashMap::new();
+    let bdd_files = search_bdd_files(directory);
+    if let Ok(files) = bdd_files {
+        for file in files {
+            let mut file_path = directory.clone();
+            file_path.push(format!("file_{}.bdd", file));
+            //Create a buffered Reader and insert it in a Hashmap
+            let bdd_reader = BufReader::new(File::open(&file_path)?);
+            my_readers.insert(file, bdd_reader);
+        }
+    }
+    return Ok(my_readers);
 }
 
 impl KvStore {
@@ -52,12 +86,24 @@ impl KvStore {
         file.push("file_0.bdd");
         let mut idx_file: PathBuf = directory.clone();
         idx_file.push("kvindex.idx");
-        KvStore {
-            active_file_number: 0,
-            base_directory: directory.clone(),
-            active_file_path: file,
-            index_map: BTreeMap::new(),
-            index_file_path: idx_file,
+        if let Ok(readers) = init_readers(&directory) {
+            KvStore {
+                active_file_number: 0,
+                base_directory: directory.clone(),
+                active_file_path: file,
+                index_map: BTreeMap::new(),
+                index_file_path: idx_file,
+                readers: readers,
+            }
+        } else {
+            KvStore {
+                active_file_number: 0,
+                base_directory: directory.clone(),
+                active_file_path: file,
+                index_map: BTreeMap::new(),
+                index_file_path: idx_file,
+                readers: HashMap::new(),
+            }
         }
     }
 
@@ -163,23 +209,22 @@ impl KvsEngine for KvStore {
                         "And index has been found. Record offset is {}",
                         idx.record_offset
                     );
-                    let mut log_file = self.base_directory.clone();
-                    log_file.push(format!("file_{}.bdd", idx.file_number).as_str());
-                    let mut log_file = OpenOptions::new().read(true).open(&log_file)?;
+                    let reader = self
+                        .readers
+                        .get_mut(&(idx.file_number as u64))
+                        .expect("File not found");
+
                     let mut buf_size_of = [0u8; 8];
                     debug!("Seeking in the file");
-                    std::io::Read::by_ref(&mut log_file)
-                        .seek(SeekFrom::Start(idx.record_offset))?;
+                    reader.seek(SeekFrom::Start(idx.record_offset))?;
                     debug!("Reading bytes");
-                    std::io::Read::by_ref(&mut log_file)
-                        .take(8)
-                        .read(&mut buf_size_of)?;
+                    reader.take(8).read(&mut buf_size_of)?;
 
                     let record_size = i64::from_ne_bytes(buf_size_of);
                     if record_size > 0 {
                         debug!("Record size is {}", record_size);
                         let mut read_vector = vec![];
-                        std::io::Read::by_ref(&mut log_file)
+                        reader
                             .take(record_size as u64)
                             .read_to_end(&mut read_vector)?;
                         let record: KvRecord = serde_json::from_slice(read_vector.as_slice())?;
