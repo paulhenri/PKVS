@@ -49,6 +49,9 @@ impl KvIndex {
     }
 }
 
+/// Main structure that hold our key/value store
+/// Everything is based around a hashmap of bufreader for fast access
+/// And 2 writers : One for the active log file and an other for the active index file
 pub struct KvStore {
     active_file_number: u64,
     base_directory: PathBuf,
@@ -108,7 +111,7 @@ impl KvStore {
 
         let mut idx_file: PathBuf = directory.clone();
         idx_file.push("kvindex.idx");
-        let mut index_writer = OpenOptions::new()
+        let index_writer = OpenOptions::new()
             .write(true)
             .create(true)
             .read(true)
@@ -142,6 +145,7 @@ impl KvStore {
         }
     }
 
+    /// Synchronize the index map to a file.
     pub fn sync_index(&mut self) -> Result<()> {
         let mut index_file_path: PathBuf = self.base_directory.clone();
         index_file_path.push("kvindex.idx");
@@ -171,7 +175,7 @@ impl KvStore {
     /// And finaly we will check if each data file is indexed, if not it will be indexed.
     /// Even if the operation can be long at time it should be performed only one when running in
     /// server <-> client mode
-    pub fn open<p: Into<PathBuf>>(directory: p) -> Result<KvStore> {
+    pub fn open<P: Into<PathBuf>>(directory: P) -> Result<KvStore> {
         let mut pos: u64 = 0;
         let mut mypath: PathBuf = directory.into();
         let mut store: KvStore = KvStore::new(mypath.clone());
@@ -179,7 +183,7 @@ impl KvStore {
         match File::open(&mypath) {
             Ok(mut idx_file) => {
                 let mut rl_bytes = [0u8; 8];
-                idx_file.seek(SeekFrom::Start(pos));
+                idx_file.seek(SeekFrom::Start(pos))?;
                 let mut bcontinue = true;
                 while bcontinue {
                     if let Ok(nb_bytes_read) = std::io::Read::by_ref(&mut idx_file)
@@ -194,7 +198,7 @@ impl KvStore {
                                 let mut record_bytes = vec![];
                                 std::io::Read::by_ref(&mut idx_file)
                                     .take(size_of_record as u64)
-                                    .read_to_end(&mut record_bytes);
+                                    .read_to_end(&mut record_bytes)?;
                                 match serde_json::from_slice::<KvIndex>(record_bytes.as_slice()) {
                                     Ok(index) => {
                                         store.index_map.insert(index.key.clone(), index);
@@ -220,6 +224,8 @@ impl KvStore {
         return Ok(store);
     }
 
+    /// Go through the index_map and for each index found : Copy datas from file to a new one.
+    /// In the end remaining file should be filled with active records.
     pub fn compaction(&mut self) -> Result<()> {
         // Files from 1 to Active-1 are compacted
         // This should not be confused with the new file function that simply create a new log file
@@ -388,7 +394,6 @@ impl KvsEngine for KvStore {
                         debug!("Record size is < 0 ");
                         return Ok(Some("Key not found".to_string()));
                     }
-                    Ok(Some("".to_string()))
                 }
                 None => {
                     debug!("No index record was found.");

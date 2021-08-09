@@ -3,7 +3,8 @@
 This is a en educationnal project based on the Talent-Plan Rust course from Pingcap. 
 A simple Key-Value store based on few premises : 
 * We only store text, the engine can not store anything else for the value.
-* Storage is organised as described by the bitcask paper 
+* Storage should be organised as Bitcask described it in their paper : For now it is only serialized structures but i don't really see the point of doing that other than practicing serialization...
+
 
 ## Non goals ##
 * Produe another key-value store for the market

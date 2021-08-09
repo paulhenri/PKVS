@@ -1,10 +1,13 @@
+/// This binary is the standalone version of the database
+/// it is used mainly for debug purpose as it go through the KvStore structure directly
+/// We can trace direct problems without network layer
 extern crate clap;
 use clap::{App, Arg, SubCommand};
 use kvs::kvsengine::kvstore::KvStore;
 use kvs::kvsengine::*;
 use std::env;
 use std::process;
-use tracing::{debug, info};
+use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 fn main() -> kvs::Result<()> {
@@ -49,7 +52,7 @@ fn main() -> kvs::Result<()> {
                 my_store.set(
                     subcommand.value_of("key").unwrap().to_string(),
                     subcommand.value_of("value").unwrap().to_string(),
-                );
+                )?;
                 drop(my_store);
                 process::exit(0);
             }
@@ -63,20 +66,19 @@ fn main() -> kvs::Result<()> {
                 Ok(x) => {
                     if let Some(z) = x {
                         println!("{}", z);
+                        process::exit(0);
                     }
                 }
                 Err(x) => {
                     debug!("Error when getting the value: {:?}", x);
-
-                    println!("Key not found")
+                    eprintln!("Key not found");
+                    process::exit(1);
                 }
             }
         }
-        process::exit(3);
     }
 
-    panic!();
-    process::exit(3)
+    Ok(())
 }
 
 fn setup() -> kvs::Result<()> {

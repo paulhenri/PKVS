@@ -1,30 +1,28 @@
 use crate::errors::*;
 use crate::kvmessage::KvMessage;
 use crate::kvsengine::kvstore::KvStore;
-use crate::kvsengine::kvstore::*;
+
 use crate::kvsengine::KvsEngine;
-use message_io::events::{EventReceiver, EventSender};
-use message_io::network::{Endpoint, NetEvent, Transport};
-use message_io::node::{self, NodeEvent, NodeHandler, NodeListener};
-use serde::{Deserialize, Serialize};
+use message_io::network::{NetEvent, Transport};
+use message_io::node::{self};
+
 use std::net::Ipv4Addr;
 use std::net::{SocketAddr, SocketAddrV4};
 use tracing::{debug, info};
 
+/// Server structure - Only hold the networks infos and functions
 pub struct Kvserver {
     local_socketadr: SocketAddr,
-    storage_engine: KvsStorageEngine,
 }
 
 impl Kvserver {
     /// Initializer of the server struc
-    pub fn new(local_addr: &str, local_port: u16, storage_engine: KvsStorageEngine) -> Kvserver {
+    pub fn new(local_addr: &str, local_port: u16) -> Kvserver {
         let ipvadr = local_addr.parse::<Ipv4Addr>();
         match ipvadr {
             Ok(addr) => {
                 return Kvserver {
                     local_socketadr: SocketAddr::V4(SocketAddrV4::new(addr, local_port)),
-                    storage_engine,
                 };
             }
             Err(x) => {
@@ -34,6 +32,8 @@ impl Kvserver {
         }
     }
 
+    /// Main function to run the loop for server
+    /// handle connexions, requests and returns
     pub fn run_server(&mut self) -> Result<()> {
         //First, intiate the store - This can take some time if indexes need to be rebuilt
         let mut my_store: KvStore = KvStore::open(std::env::current_dir()?)?;
@@ -124,7 +124,6 @@ impl Kvserver {
                             }
                             handler.network().send(endpoint, &_reponse);
                         }
-                        _ => println!("No know pattern was found"),
                     }
                 }
             }

@@ -1,5 +1,5 @@
-use color_eyre::Report;
-use serde_json::error::Error;
+//use color_eyre::Report;
+//use serde_json::error::Error;
 
 /// KvsError: Enum to deal with error programm wide
 #[derive(Debug)]
@@ -46,9 +46,3 @@ impl From<serde_json::error::Error> for KvsError {
 
 /// Result<T>
 pub type Result<T> = std::result::Result<T, KvsError>;
-
-#[derive(Debug)]
-pub enum KvsStorageEngine {
-    KvsEngine,
-    Sled,
-}
