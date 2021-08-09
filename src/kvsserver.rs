@@ -36,7 +36,7 @@ impl Kvserver {
 
     pub fn run_server(&mut self) -> Result<()> {
         //First, intiate the store - This can take some time if indexes need to be rebuilt
-        let mut my_store: KvStore = KvStore::open(std::env::current_dir()?);
+        let mut my_store: KvStore = KvStore::open(std::env::current_dir()?)?;
 
         //Finaly, we can connect and start to wait for events
         let (handler, listener) = node::split::<()>();

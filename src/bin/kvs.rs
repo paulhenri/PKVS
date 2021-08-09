@@ -45,27 +45,20 @@ fn main() -> kvs::Result<()> {
         if let Some(subcommand) = m.subcommand_matches("set") {
             if subcommand.is_present("key") && subcommand.is_present("value") {
                 debug!("Value and Key have been provided.");
-                let mut my_store: KvStore = KvStore::open(std::env::current_dir()?);
+                let mut my_store: KvStore = KvStore::open(std::env::current_dir()?)?;
                 my_store.set(
                     subcommand.value_of("key").unwrap().to_string(),
                     subcommand.value_of("value").unwrap().to_string(),
                 );
-                match my_store.sync_index() {
-                    Ok(_) => {
-                        process::exit(3);
-                    }
-                    Err(x) => {
-                        debug!("Error when syncing indexes : {:?}", x);
-                        process::exit(-1)
-                    }
-                }
+                drop(my_store);
+                process::exit(0);
             }
         }
     }
 
     if m.is_present("get") {
         if let Some(subcommand) = m.subcommand_matches("get") {
-            let mut my_store: KvStore = KvStore::open(std::env::current_dir()?);
+            let mut my_store: KvStore = KvStore::open(std::env::current_dir()?)?;
             match my_store.get(subcommand.value_of("key").unwrap().to_string()) {
                 Ok(x) => {
                     if let Some(z) = x {
