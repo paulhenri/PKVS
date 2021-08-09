@@ -13,7 +13,7 @@ A simple Key-Value store based on few premises :
 ## Goals ##
 * Learn more about Rust and tacke a real-world project
 * Learn more about database storage
-* Learn more about distributed-systems
+* Learn more about distributed-systems (The talent Rust course is the entry gate for their distributed systems course with Rust :) )
 
 ## Future plans ##
 * Finish the PingCap course (Add multithreading to the server and asynchronous IOs)
